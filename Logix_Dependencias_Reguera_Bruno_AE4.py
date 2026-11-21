@@ -1,4 +1,4 @@
-"""Analizador de dependencias LOGIX - Etapa 2: lista, matriz de adyacencia y grados."""
+"""Analizador de dependencias LOGIX - Etapa 3: recorridos, ciclos y orden de migracion."""
 import os
 
 CARPETA = os.path.dirname(os.path.abspath(__file__))
@@ -106,17 +106,91 @@ def calcular_grados(grafo):
     return {m: (len(d), sum(m in x for x in grafo.values())) for m, d in grafo.items()}
 
 
+# ---------- Recorridos (RF05) ----------
+def dfs_recursivo(grafo, actual, visitados):
+    visitados.append(actual)
+    for vecino in grafo[actual]:
+        if vecino not in visitados:
+            dfs_recursivo(grafo, vecino, visitados)
+
+
+def bfs_cola(grafo, inicio):
+    visitados, cola = [inicio], [inicio]
+    while cola:
+        for vecino in grafo[cola.pop(0)]:
+            if vecino not in visitados:
+                visitados.append(vecino)
+                cola.append(vecino)
+    return visitados
+
+
+def modulos_afectados(grafo, modulo):
+    """Modulos que dependen (directa o indirectamente) de 'modulo'. BFS invertido.
+    El propio modulo aparece solo si esta en un ciclo."""
+    afectados, cola = [], [m for m in grafo if modulo in grafo[m]]
+    while cola:
+        actual = cola.pop(0)
+        if actual not in afectados:
+            afectados.append(actual)
+            cola += [m for m in grafo if actual in grafo[m]]
+    return [m for m in grafo if m in afectados]
+
+
+# ---------- Ciclos (RF06) y orden de migracion (RF07) ----------
+def detectar_ciclos(grafo):
+    """DFS con estados (0 sin visitar, 1 en el camino, 2 terminado).
+    Devuelve la lista de ciclos; cada ciclo es una lista de modulos."""
+    estado, camino, ciclos = {m: 0 for m in grafo}, [], []
+
+    def recorrer(u):
+        estado[u] = 1
+        camino.append(u)
+        for v in grafo[u]:
+            if estado[v] == 1:
+                ciclos.append(camino[camino.index(v):])
+            elif estado[v] == 0:
+                recorrer(v)
+        camino.pop()
+        estado[u] = 2
+
+    for m in grafo:
+        if estado[m] == 0:
+            recorrer(m)
+    return ciclos
+
+
+def orden_topologico_kahn(grafo):
+    """Orden de migracion con cola. ValueError si hay ciclos."""
+    pendientes = {m: len(d) for m, d in grafo.items()}
+    cola, orden = [m for m in grafo if pendientes[m] == 0], []
+    while cola:
+        actual = cola.pop(0)
+        orden.append(actual)
+        for m in grafo:
+            if actual in grafo[m]:
+                pendientes[m] -= 1
+                if pendientes[m] == 0:
+                    cola.append(m)
+    if len(orden) < len(grafo):
+        raise ValueError("El grafo contiene ciclos: no existe orden valido")
+    return orden
+
+
 def main():
-    """Prueba de la etapa: lista, matriz y grados del grafo original."""
-    grafo = cargar_grafo("logix_legacy.txt")
-    print("\n".join(mostrar_lista_adyacencia(grafo)))
-    mods, mat = generar_matriz_adyacencia(grafo)
-    print("\n     " + " ".join(f"{m:>4}" for m in mods))
-    for m, fila in zip(mods, mat):
-        print(f"{m:>4} " + " ".join(f"{x:>4}" for x in fila))
-    print()
-    for m, (s, e) in calcular_grados(grafo).items():
-        print(f"{m}: salida {s}, entrada {e}")
+    """Prueba de la etapa: recorridos, impacto, ciclos y orden de migracion."""
+    for archivo in ("logix_legacy.txt", "logix_reestructurado.txt"):
+        grafo = cargar_grafo(archivo)
+        print("==", archivo)
+        vis = []
+        dfs_recursivo(grafo, "PED", vis)
+        print("DFS desde PED:", " -> ".join(vis))
+        print("BFS desde PED:", " -> ".join(bfs_cola(grafo, "PED")))
+        print("Afectados si se modifica INV:", ", ".join(modulos_afectados(grafo, "INV")))
+        print("Ciclos:", detectar_ciclos(grafo) or "ninguno")
+        try:
+            print("Orden de migracion:", " -> ".join(orden_topologico_kahn(grafo)))
+        except ValueError as e:
+            print("Error:", e)
 
 
 if __name__ == "__main__":
