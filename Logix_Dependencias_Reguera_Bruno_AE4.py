@@ -1,4 +1,4 @@
-"""Analizador de dependencias LOGIX - Etapa 1: cargar, editar y guardar el grafo."""
+"""Analizador de dependencias LOGIX - Etapa 2: lista, matriz de adyacencia y grados."""
 import os
 
 CARPETA = os.path.dirname(os.path.abspath(__file__))
@@ -90,19 +90,33 @@ def eliminar_modulo(grafo, nombre):
             deps.remove(nombre)
 
 
+# ---------- Representaciones (RF03) y grados (RF04) ----------
+def mostrar_lista_adyacencia(grafo):
+    return [f"{m} -> {', '.join(d) or '(sin dependencias)'}" for m, d in grafo.items()]
+
+
+def generar_matriz_adyacencia(grafo):
+    """(modulos, matriz): matriz[i][j] = 1 si el modulo i depende del j."""
+    mods = list(grafo)
+    return mods, [[int(b in grafo[a]) for b in mods] for a in mods]
+
+
+def calcular_grados(grafo):
+    """{modulo: (grado_salida, grado_entrada)}"""
+    return {m: (len(d), sum(m in x for x in grafo.values())) for m, d in grafo.items()}
+
+
 def main():
-    """Prueba de la etapa: carga el grafo, lo edita y lo guarda."""
-    try:
-        grafo = cargar_grafo("logix_legacy.txt")
-        agregar_modulo(grafo, "API")
-        agregar_dependencia(grafo, "PED", "API")
-    except ValueError as e:
-        print("Error:", e)
-        return
-    for modulo, deps in grafo.items():
-        print(modulo, "->", deps)
-    guardar_grafo(grafo, "logix_editado.txt")
-    print("Guardado en logix_editado.txt")
+    """Prueba de la etapa: lista, matriz y grados del grafo original."""
+    grafo = cargar_grafo("logix_legacy.txt")
+    print("\n".join(mostrar_lista_adyacencia(grafo)))
+    mods, mat = generar_matriz_adyacencia(grafo)
+    print("\n     " + " ".join(f"{m:>4}" for m in mods))
+    for m, fila in zip(mods, mat):
+        print(f"{m:>4} " + " ".join(f"{x:>4}" for x in fila))
+    print()
+    for m, (s, e) in calcular_grados(grafo).items():
+        print(f"{m}: salida {s}, entrada {e}")
 
 
 if __name__ == "__main__":
