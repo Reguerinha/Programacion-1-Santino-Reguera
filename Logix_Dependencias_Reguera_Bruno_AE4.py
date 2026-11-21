@@ -1,4 +1,4 @@
-"""Analizador de dependencias LOGIX - Etapa 3: recorridos, ciclos y orden de migracion."""
+"""Analizador de dependencias LOGIX. grafo = {modulo: [modulos de los que depende]}"""
 import os
 
 CARPETA = os.path.dirname(os.path.abspath(__file__))
@@ -176,19 +176,100 @@ def orden_topologico_kahn(grafo):
     return orden
 
 
+def exportar_reporte(grafo, nombre_archivo="reporte_analisis.txt"):
+    ciclos = detectar_ciclos(grafo)
+    try:
+        orden = " -> ".join(orden_topologico_kahn(grafo))
+    except ValueError as e:
+        orden = str(e)
+    lineas = ["REPORTE DE ANALISIS - LOGIX", "", *mostrar_lista_adyacencia(grafo), "",
+              *[f"{m}: salida {s}, entrada {e}" for m, (s, e) in calcular_grados(grafo).items()], "",
+              "Ciclos: " + ("; ".join(" -> ".join(c + [c[0]]) for c in ciclos) or "ninguno"),
+              "Orden de migracion: " + orden]
+    escribir(nombre_archivo, "\n".join(lineas) + "\n")
+
+
+# ---------- Menu ----------
+MENU = """
+=== ANALIZADOR DE DEPENDENCIAS LOGIX ===
+ 1. Lista de adyacencia        9. Cargar grafo desde archivo
+ 2. Matriz de adyacencia      10. Agregar modulo
+ 3. Grados de entrada/salida  11. Agregar dependencia
+ 4. Recorrido DFS (recursivo) 12. Eliminar dependencia
+ 5. Recorrido BFS (con cola)  13. Eliminar modulo
+ 6. Impacto en cascada        14. Guardar grafo (logix_editado.txt)
+ 7. Detectar ciclos           15. Exportar reporte (reporte_analisis.txt)
+ 8. Orden de migracion         0. Salir"""
+
+
+def ejecutar(op, grafo):
+    """Ejecuta una opcion del menu y devuelve el grafo (cambia al cargar otro)."""
+    if not grafo and op in "1 2 3 4 5 6 7 8 11 12 13 14 15".split():
+        raise ValueError("El grafo esta vacio. Cargalo primero con la opcion 9.")
+    if op in ("4", "5", "6"):
+        ini = input("Modulo: ").strip().upper()
+        if ini not in grafo:
+            print("Modulo no encontrado. Modulos:", ", ".join(grafo))
+        elif op == "4":
+            vis = []
+            dfs_recursivo(grafo, ini, vis)
+            print("DFS:", " -> ".join(vis))
+        elif op == "5":
+            print("BFS:", " -> ".join(bfs_cola(grafo, ini)))
+        else:
+            af = modulos_afectados(grafo, ini)
+            print(f"Si se modifica {ini} se afectan {len(af)}:", ", ".join(af) or "ninguno")
+    elif op == "1":
+        print("\n".join(mostrar_lista_adyacencia(grafo)))
+    elif op == "2":
+        mods, mat = generar_matriz_adyacencia(grafo)
+        print("     " + " ".join(f"{m:>4}" for m in mods))
+        for m, fila in zip(mods, mat):
+            print(f"{m:>4} " + " ".join(f"{x:>4}" for x in fila))
+    elif op == "3":
+        for m, (s, e) in calcular_grados(grafo).items():
+            print(f"{m}: salida {s}, entrada {e}")
+    elif op == "7":
+        ciclos = detectar_ciclos(grafo)
+        print("\n".join("Ciclo: " + " -> ".join(c + [c[0]]) for c in ciclos) or "No hay ciclos.")
+    elif op == "8":
+        print("Orden de migracion:", " -> ".join(orden_topologico_kahn(grafo)))
+    elif op == "9":
+        grafo = cargar_grafo(input("Archivo (Enter = logix_reestructurado.txt): ").strip()
+                             or "logix_reestructurado.txt")
+        print("Grafo cargado:", len(grafo), "modulos.")
+    elif op == "10":
+        agregar_modulo(grafo, input("Nombre del modulo nuevo: "))
+    elif op == "11":
+        agregar_dependencia(grafo, input("Modulo que depende: "), input("Depende de: "))
+    elif op == "12":
+        eliminar_dependencia(grafo, input("Modulo que depende: "), input("Deja de depender de: "))
+    elif op == "13":
+        eliminar_modulo(grafo, input("Modulo a eliminar: "))
+    elif op == "14":
+        guardar_grafo(grafo, "logix_editado.txt")
+        print("Guardado en logix_editado.txt")
+    elif op == "15":
+        exportar_reporte(grafo)
+        print("Reporte guardado en reporte_analisis.txt")
+    else:
+        print("Opcion invalida.")
+    return grafo
+
+
 def main():
-    """Prueba de la etapa: recorridos, impacto, ciclos y orden de migracion."""
-    for archivo in ("logix_legacy.txt", "logix_reestructurado.txt"):
-        grafo = cargar_grafo(archivo)
-        print("==", archivo)
-        vis = []
-        dfs_recursivo(grafo, "PED", vis)
-        print("DFS desde PED:", " -> ".join(vis))
-        print("BFS desde PED:", " -> ".join(bfs_cola(grafo, "PED")))
-        print("Afectados si se modifica INV:", ", ".join(modulos_afectados(grafo, "INV")))
-        print("Ciclos:", detectar_ciclos(grafo) or "ninguno")
+    try:
+        grafo = cargar_grafo("logix_legacy.txt")
+    except ValueError as e:
+        print("Error:", e, "- grafo vacio (opcion 9 para cargar otro).")
+        grafo = {}
+    while True:
+        print(MENU)
+        op = input("Opcion: ").strip()
+        if op == "0":
+            break
         try:
-            print("Orden de migracion:", " -> ".join(orden_topologico_kahn(grafo)))
+            grafo = ejecutar(op, grafo)
         except ValueError as e:
             print("Error:", e)
 
